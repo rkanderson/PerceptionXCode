@@ -30,6 +30,7 @@ class GameScene: SKScene {
         levelLabel = childNode(withName: "//levelLabel") as! SKLabelNode
         shiftsLabel = childNode(withName: "//shiftsLabel") as! SKLabelNode
         player = childNode(withName: "//player") as! Player
+        player.gameScene = self
         levelNode = childNode(withName: "//levelContainer")
         loadLevel(0);
     }
@@ -60,11 +61,22 @@ class GameScene: SKScene {
     }
     
     override func keyDown(with event: NSEvent) {
-        player.keyDown(with: event, levelOrientation: currentOrientation)
+        player.keyDown(withKeyCode: event.keyCode)
+        switch event.keyCode {
+        case Keycode.s:
+            currentOrientation = .one
+        case Keycode.d:
+            currentOrientation = .two
+        case Keycode.w:
+            currentOrientation = .three
+        case Keycode.a:
+            currentOrientation = .four
+        default: break
+        }
     }
     
     override func keyUp(with event: NSEvent) {
-        player.keyUp(with: event, levelOrientation: currentOrientation)
+        player.keyUp(withKeyCode: event.keyCode)
     }
     
     func loadLevel(_ index: Int) {
@@ -80,6 +92,6 @@ class GameScene: SKScene {
         // Called before each frame is rendered
         let dt = CGFloat(currentTime - (prevTime ?? currentTime))
         prevTime = currentTime
-        player.update(deltaTime: dt, platforms: platforms)
+        player.update(deltaTime: dt)
     }
 }

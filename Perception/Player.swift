@@ -11,11 +11,14 @@ import GameplayKit
 
 class Player: SKSpriteNode {
     
-    let gravity: CGFloat = -620
-    let jumpInitialVelocity: CGFloat = 300
+    weak var gameScene: GameScene?
+    let gravity: CGFloat = 620
+    let jumpInitialVelocity: CGFloat = 450
     let horizontalSpeed: CGFloat = 200
     var velocity = CGVector(dx: 0, dy: 0)
     var previousPosition: CGPoint!
+    var jumping = false
+    var canJump = false
      //Input variables
     var leftMotion = (pressed: false, active: false)
     var rightMotion = (pressed: false, active: false)
@@ -27,44 +30,117 @@ class Player: SKSpriteNode {
         previousPosition = self.position
     }
     
-    func update(deltaTime dt: CGFloat, platforms: [SKSpriteNode]) {
-        velocity.dy += gravity * dt
-        if rightMotion.active {
-            velocity.dx = horizontalSpeed
-        } else if leftMotion.active {
-            velocity.dx = -horizontalSpeed
-        } else {
-            velocity.dx = 0
-        }
-        self.previousPosition = self.position
-        self.position.x += velocity.dx * dt
-        self.position.y += velocity.dy * dt
-        
-        for platform in platforms {
-            if self.intersects(platform) {
-                if testAboveOrBelow(otherSprite: platform, playerPosition: previousPosition) {
-                    // Player hit from either top or the bottom
-                    velocity.dy = 0
-                    if previousPosition.y > platform.position.y {
-                        // Hit from top
-                        position.y = platform.position.y + platform.size.height/2 + self.size.height/2
+    func update(deltaTime dt: CGFloat) {
+        if let gameScene = gameScene {
+            orientationSpecificUpdates(deltaTime: dt, gameScene: gameScene)
+            self.previousPosition = self.position
+            self.position.x += velocity.dx * dt
+            self.position.y += velocity.dy * dt
+            
+            // YAY PHYSICS!
+            for platform in gameScene.platforms {
+                if self.intersects(platform) {
+                    if testAboveOrBelow(otherSprite: platform, playerPosition: previousPosition) {
+                        // Player hit from either top or the bottom
+                        velocity.dy = 0
+                        if previousPosition.y > platform.position.y {
+                            // Hit from top
+                            position.y = platform.position.y + platform.size.height/2 + self.size.height/2
+                            if gameScene.currentOrientation == .one { canJump = true }
+                        } else {
+                            // Hit from bottom
+                            position.y = platform.position.y - platform.size.height/2 - self.size.height/2
+                            if gameScene.currentOrientation == .three { canJump = true }
+                        }
                     } else {
-                        // Hit from bottom
-                        position.y = platform.position.y - platform.size.height/2 - self.size.height/2
-                    }
-                } else {
-                    // Player hit from the left or right side
-                    if previousPosition.x > platform.position.x {
-                        // Hit from the right
-                        position.x = platform.position.x + platform.size.width/2 + self.size.width/2
-                    } else {
-                        /// Hit from the left
-                        position.x = platform.position.x - platform.size.width/2 - self.size.width/2
+                        // Player hit from the left or right side
+                        velocity.dx = 0
+                        if previousPosition.x > platform.position.x {
+                            // Hit from the right
+                            position.x = platform.position.x + platform.size.width/2 + self.size.width/2
+                            if gameScene.currentOrientation == .four { canJump = true }
+
+                        } else {
+                            /// Hit from the left
+                            position.x = platform.position.x - platform.size.width/2 - self.size.width/2
+                            if gameScene.currentOrientation == .two { canJump = true }
+
+                        }
                     }
                 }
             }
         }
-        
+    }
+    
+    func orientationSpecificUpdates(deltaTime dt: CGFloat, gameScene: GameScene) {
+        // Updates gravity and responds to user input in different ways depending on
+        // the current level orientation
+        switch gameScene.currentOrientation {
+        // Gravity down
+        case .one:
+            velocity.dy -= gravity * dt
+            if rightMotion.active {
+                velocity.dx = horizontalSpeed
+            } else if leftMotion.active {
+                velocity.dx = -horizontalSpeed
+            } else {
+                velocity.dx = 0
+            }
+            if jumping && canJump {
+                jumping = false
+                canJump = false
+                velocity.dy = jumpInitialVelocity
+            }
+        //Gravity to the right
+        case .two:
+            print("grav right")
+            velocity.dx += gravity * dt
+            if rightMotion.active {
+                velocity.dy = horizontalSpeed
+            } else if leftMotion.active {
+                velocity.dy = -horizontalSpeed
+            } else {
+                velocity.dy = 0
+            }
+            if jumping && canJump {
+                jumping = false
+                canJump = false
+                velocity.dx = -jumpInitialVelocity
+            }
+        //Gravity up
+        case .three:
+            velocity.dy += gravity * dt
+            if rightMotion.active {
+                velocity.dx = -horizontalSpeed
+            } else if leftMotion.active {
+                velocity.dx = horizontalSpeed
+            } else {
+                velocity.dx = 0
+            }
+            if jumping && canJump {
+                jumping = false
+                canJump = false
+                velocity.dy = -jumpInitialVelocity
+            }
+            
+        //Gravity left
+        case .four:
+            print("grav left dx=\(velocity.dx)")
+            velocity.dx -= gravity * dt
+            if rightMotion.active {
+                velocity.dy = -horizontalSpeed
+            } else if leftMotion.active {
+                velocity.dy = horizontalSpeed
+            } else {
+                velocity.dy = 0
+            }
+            if jumping && canJump {
+                jumping = false
+                canJump = false
+                velocity.dx = jumpInitialVelocity
+            }
+
+        }
     }
     
     func testAboveOrBelow(otherSprite other: SKSpriteNode, playerPosition: CGPoint) -> Bool {
@@ -88,8 +164,8 @@ class Player: SKSpriteNode {
     }
     
     
-    func keyDown(with event: NSEvent, levelOrientation orientation: GameScene.LevelOrientation) {
-        switch event.keyCode {
+    func keyDown(withKeyCode keyCode: UInt16) {
+        switch keyCode {
         case Keycode.leftArrow:
             leftMotion.pressed = true
             if rightMotion.pressed == false { leftMotion.active = true }
@@ -97,7 +173,9 @@ class Player: SKSpriteNode {
             rightMotion.pressed = true
             if leftMotion.pressed == false { rightMotion.active = true }
         case Keycode.upArrow:
-            velocity.dy = jumpInitialVelocity
+            if canJump {
+                jumping = true // Do later in update
+            }
         default: break
         }
 //        print("rm \(rightMotion)")
@@ -105,8 +183,8 @@ class Player: SKSpriteNode {
 
     }
     
-    func keyUp(with event: NSEvent, levelOrientation orientation: GameScene.LevelOrientation) {
-        switch event.keyCode {
+    func keyUp(withKeyCode keyCode: UInt16) {
+        switch keyCode {
         case Keycode.leftArrow:
             leftMotion.pressed = false
             leftMotion.active = false
